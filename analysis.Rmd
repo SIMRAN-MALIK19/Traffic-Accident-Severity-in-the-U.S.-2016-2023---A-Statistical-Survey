@@ -1,0 +1,353 @@
+---
+title: "Analysis 1: Impact of continuous weathervariables on the severity of the accident."
+author: "Simran Malik"
+date: "2023-12-16"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(mosaic)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r load-data}
+accidents<-read.csv("US_Accidents_March23.csv",as.is=T)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r names}
+names(accidents)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+summary(accidents)
+```
+```{r}
+str(accidents)
+```
+
+```{r}
+library(dplyr)
+
+calc_mode <- function(x){
+  
+  # List the distinct / unique values
+  distinct_values <- unique(x)
+  
+  # Count the occurrence of each distinct value
+  distinct_tabulate <- tabulate(match(x, distinct_values))
+  
+  # Return the value with the highest occurrence
+  distinct_values[which.max(distinct_tabulate)]
+}
+col_check=c("Sunrise_Sunset", "Civil_Twilight", "Nautical_Twilight", "Astronomical_Twilight","Severity","City")
+accidents <-accidents %>% 
+  mutate(Astronomical_Twilight = if_else(is.na(Astronomical_Twilight), 
+                         calc_mode(Astronomical_Twilight), 
+                         Astronomical_Twilight))
+accidents <-accidents %>% 
+  mutate(Sunrise_Sunset = if_else(is.na(Sunrise_Sunset), 
+                         calc_mode(Sunrise_Sunset), 
+                         Sunrise_Sunset))
+accidents <-accidents %>% 
+  mutate(Civil_Twilight = if_else(is.na(Civil_Twilight), 
+                         calc_mode(Civil_Twilight), 
+                         Civil_Twilight))
+accidents <-accidents %>% 
+  mutate(Nautical_Twilight = if_else(is.na(Nautical_Twilight), 
+                         calc_mode(Nautical_Twilight), 
+                         Nautical_Twilight))
+
+accidents <-accidents %>% 
+  mutate(Severity = if_else(is.na(Severity), 
+                         calc_mode(Severity), 
+                         Severity))
+accidents <-accidents %>% 
+  mutate(City = if_else(is.na(City), 
+                         calc_mode(City), 
+                         City))
+
+
+hasNAs <- colSums(is.na(accidents[, col_check])) > 0
+
+# Print the result
+if (any(hasNAs)) {
+  cat("The following columns have NaN values:", names(hasNAs[hasNAs]), "\n")
+} else {
+  cat("No NaN values in the specified columns.\n")
+}
+
+```
+
+
+```{r}
+
+library(dplyr)
+
+columns_to_replace <- c("Distance.mi.", "Temperature.F.", "Wind_Chill.F.", 
+                        "Pressure.in.", "Visibility.mi.", "Wind_Speed.mph.", 
+                        "Humidity...", "Precipitation.in.")
+
+
+
+
+
+accidents <- accidents %>%
+  group_by(Astronomical_Twilight,City,Junction,Crossing) %>%
+  mutate(across(all_of(columns_to_replace), ~ ifelse(is.na(.), median(., na.rm = TRUE), .)))
+```
+
+
+```{r}
+selected_variable <- "Distance.mi."  
+other_variables <- c("Temperature.F.","Wind_Chill.F.", "Pressure.in.","Visibility.mi.","Wind_Speed.mph.", "Humidity...","Precipitation.in.")
+
+selected_data <- accidents[c(selected_variable, other_variables)]
+
+pairs(selected_data, pch = 16, col = "blue", cex.labels = 1.5)
+```
+Interpretation: There does not seem to be any strong correlation of distance with the continuous weather variables
+
+we will still check the numerical values of the correlation
+
+
+```{r}
+
+cor1=cor(subset_data$Distance.mi.,subset_data$Temperature.F.)
+print(cor1)
+cor2=cor(subset_data$Distance.mi.,subset_data$Wind_Chill.F.)
+print(cor2)
+cor3=cor(subset_data$Distance.mi.,subset_data$Pressure.in.)
+print(cor3)
+cor4=cor(subset_data$Distance.mi.,subset_data$Visibility.mi.)
+print(cor4)
+cor5=cor(subset_data$Distance.mi.,subset_data$Wind_Speed.mph.)
+print(cor5)
+cor6=cor(subset_data$Distance.mi.,subset_data$Humidity...)
+print(cor6)
+cor7=cor(subset_data$Distance.mi.,subset_data$Precipitation.in.)
+print(cor7)
+
+
+```
+interpretation: There is no visible linear correlation of distance with any of the continuous weather variables
+
+Let's try to fit a linear model with the variable with highest absolute correlation coefficient -pressure
+```{r}
+lm1<-lm(subset_data$Distance.mi.~subset_data$Pressure.in.,data=subset_data)
+summary(lm1)
+```
+The multiple R square value is very low, indicating that Pressure cannot predict the distance variable well, and the two variables do not have a linear relationship.
+Lets see if this output coincides with the assumptions of the model
+
+Checking assumptions:
+1)linearity- this condition is not satisfied as there does not seem to be any linear relation of distance with pressure
+```{r}
+library(mosaic)
+xyplot(subset_data$Distance.mi.~subset_data$Pressure.in.,data=subset_data, type=c("p","r"))
+```
+2)constant variance and Independence: There is a pattern in the scatterplot of residuals, the spread is not random. There seem to be more residuals on the positive side of x=0, showing that the expected values of residuals is not zero.
+
+```{r}
+residuals <- residuals(model1)
+
+# Create an XY plot of residuals
+plot(lm1$fitted.values, residuals, 
+     xlab = "Fitted values", ylab = "Residuals",
+     main = "Residuals vs Fitted Values")
+```
+3)Normality:
+The qq plot is far from linear. Therefore there is no normality in the spread of residuals.This condition is not satisfied
+
+
+```{r}
+qqmath(~resid(lm1))
+ladd(panel.qqmathline(resid(lm1)))
+```
+
+
+Conclusion: all four assumptions are not satisfied,which inline with the low multiple R square value of the fitted model, hence we cannot use SLR. 
+
+therefore linear model does not represent the relationship between the continuous weather variables and distance response variable
+
+lets try to fit a multiple linear model to study the relationship between the continuous weather variables and distance response variable
+```{r}
+mlr_model <- lm(Distance.mi. ~  + Temperature.F. + Wind_Chill.F. + Pressure.in.+ Visibility.mi.+Wind_Speed.mph.+Precipitation.in., data = accidents)
+
+# Summary of the regression model
+summary(mlr_model)
+```
+The Multiple R square value is very low. therefor this model is not a good fit
+
+lets try to scale the values with log scaling and check the values of correlation
+```{r}
+subset_data$TDistance.mi.<- log(subset_data$Distance.mi.)
+subset_data$TTemperature.F.<- log(subset_data$Temperature.F.)
+subset_data$TWind_Chill.F.<- log(subset_data$Wind_Chill.F.)
+subset_data$TPressure.in.<- log(subset_data$Pressure.in.)
+subset_data$TVisibility.mi.<- log(subset_data$Visibility.mi.)
+subset_data$TWind_Speed.mph.<- log(subset_data$Wind_Speed.mph.)
+subset_data$THumidity...<- log(subset_data$Humidity...)
+subset_data$TPrecipitation.in.<- log(subset_data$Precipitation.in.)
+
+replace_na_with_median <- function(x) {
+  median_value <- median(x, na.rm = TRUE)
+  replace(x, is.na(x), median_value)
+}
+
+# Replace NaN values with median for each column
+subset_data$TDistance.mi. <- replace_na_with_median(scale(subset_data$Distance.mi.))
+subset_data$TTemperature.F. <- replace_na_with_median(scale(subset_data$Temperature.F.))
+subset_data$TWind_Chill.F. <- replace_na_with_median(scale(subset_data$Wind_Chill.F.))
+subset_data$TPressure.in. <- replace_na_with_median(scale(subset_data$Pressure.in.))
+subset_data$TVisibility.mi. <- replace_na_with_median(scale(subset_data$Visibility.mi.))
+subset_data$TWind_Speed.mph. <- replace_na_with_median(scale(subset_data$Wind_Speed.mph.))
+subset_data$THumidity... <- replace_na_with_median(scale(subset_data$Humidity...))
+subset_data$TPrecipitation.in. <- replace_na_with_median(scale(subset_data$Precipitation.in.))
+
+cor1=cor(subset_data$TDistance.mi.~subset_data$TTemperature.F.)
+print(cor1)
+cor2=cor(subset_data$TDistance.mi.~subset_data$TWind_Chill.F.)
+print(cor2)
+cor3=cor(subset_data$TDistance.mi.~subset_data$TPressure.in.)
+print(cor3)
+cor4=cor(subset_data$TDistance.mi.~subset_data$TVisibility.mi.)
+print(cor4)
+cor5=cor(subset_data$TDistance.mi.~subset_data$TWind_Speed.mph.)
+print(cor5)
+cor6=cor(subset_data$TDistance.mi.~subset_data$THumidity...)
+print(cor6)
+cor7=cor(subset_data$TDistance.mi.~subset_data$TPrecipitation.in.)
+print(cor7)
+```
+the correlations of distance response variable with continuous weather variables after scaling log scaling (also tried with standard scaling) are very low. 
+lets try to fit a polynomial model.
+```{r}
+subset_data$Severity <- accidents$Severity
+sum(is.na(subset_data$Severity))
+colnames(subset_data)
+# Fit a quadratic polynomial regression
+model1 <- lm(subset_data$Severity ~ poly(subset_data$Temperature.F.
+, degree = 2) + poly(subset_data$Wind_Chill.F., degree = 2)
++poly(subset_data$Pressure.in.,degree = 2)
++poly(subset_data$Visibility.mi., degree = 2) 
++poly(subset_data$Wind_Speed.mph., degree = 2) 
++poly(subset_data$Humidity..., degree = 2) +poly(Precipitation.in., degree = 2),data = subset_data)
+summary(model1)
+```
+The Multiple R square value is very low. therefore this model is also not a good fit
+Hence we can conclude that the continuous weather variables are not sufficient on their own to predict the distance.
+
+We can now try to study the relationship of continuous weather variables with severity rating of the accident.
+
+```{r}
+library(MASS)
+library(ordinal)
+subset_data$Severity <- factor(subset_data$Severity, ordered = TRUE)
+
+# Fit an ordinal regression model
+clm_model <- clm( subset_data$Severity~ subset_data$Temperature.F. + subset_data$Wind_Chill.F. +subset_data$Pressure.in.+ subset_data$Visibility.mi. +subset_data$Wind_Speed.mph.+ subset_data$Humidity...+subset_data$Precipitation.in., data = subset_data)
+summary(clm_model)
+
+```
+Choice of model: "Severity" response variable is ordered and has values "","","","" based on how severe the accident was. We want to analyse the relationship between severity of the accident and our continuous weather variables. Therefore we will have to use an ordinal regression model. 
+Cumulative link model (CLM) is a powerful model for such data since observations are treated correctly as categorical, the ordered nature is exploited and the flexible regression framework allows for in-depth analyses.
+
+Assumptions:
+1)Independence of Observations:
+Observations in your dataset should be independent of each other. This means that the occurrence or value of the response variable for one observation should not be influenced by or correlated with the occurrence or value of the response variable for any other observation.
+
+2)Proportional Odds Assumption:
+The proportional odds assumption, also known as the parallel regression assumption, states that the effect of a predictor variable on the odds of being in a higher response category is constant across all levels of the response variable.
+
+Since we have a large dataset with observations that are collected randomly in different areas and includes a vast number of accidents with different levels of severity, we assume these conditions are satisfied.
+
+Interpretation of results:
+subset_data$Temperature.F.:
+
+Estimate: 0.01528
+Interpretation: For a one-unit increase in temperature, the log-odds of moving to a higher severity category increase by approximately 0.01528.
+Z value: 129.99 (large and positive)
+Significance: Highly significant (p < 0.001)
+Interpretation: Temperature is positively associated with higher severity.
+subset_data$Wind_Chill.F.:
+
+Estimate: -0.01818
+Interpretation: For a one-unit increase in wind chill, the log-odds of moving to a higher severity category decrease by approximately 0.01818.
+Z value: -161.87 (extremely large and negative)
+Significance: Highly significant (p < 0.001)
+Interpretation: Wind chill is negatively associated with higher severity.
+subset_data$Pressure.in.:
+
+Estimate: 0.1613
+Interpretation: For a one-unit increase in pressure, the log-odds of moving to a higher severity category increase by approximately 0.1613.
+Z value: 149.87 (large and positive)
+Significance: Highly significant (p < 0.001)
+Interpretation: Pressure is positively associated with higher severity.
+subset_data$Visibility.mi.:
+
+Estimate: 0.007369
+Interpretation: For a one-unit increase in visibility, the log-odds of moving to a higher severity category increase by approximately 0.007369.
+Z value: 20.36 (large and positive)
+Significance: Highly significant (p < 0.001)
+Interpretation: Visibility is positively associated with higher severity.
+subset_data$Wind_Speed.mph.:
+
+Estimate: 0.01812
+Interpretation: For a one-unit increase in wind speed, the log-odds of moving to a higher severity category increase by approximately 0.01812.
+Z value: 101.85 (large and positive)
+Significance: Highly significant (p < 0.001)
+Interpretation: Wind speed is positively associated with higher severity.
+subset_data$Humidity...:
+
+Estimate: 0.002674
+Interpretation: For a one-unit increase in humidity, the log-odds of moving to a higher severity category increase by approximately 0.002674.
+Z value: 57.34 (large and positive)
+Significance: Highly significant (p < 0.001)
+Interpretation: Humidity is positively associated with higher severity.
+Precipitation.in.:
+
+Estimate: 0.178
+Interpretation: For a one-unit increase in precipitation, the log-odds of moving to a higher severity category increase by approximately 0.178.
+Z value: 22.89 (large and positive)
+Significance: Highly significant (p < 0.001)
+Interpretation: Precipitation is positively associated with higher severity.
+Threshold Coefficients:
+These coefficients are specific to the thresholds between severity categories.
+
+1|2 Threshold:
+
+Estimate: 0.24919
+Z value: 7.911
+Significance: Highly significant (p < 0.001)
+Interpretation: The log-odds of moving from severity level 1 to 2 are positively associated with the predictors.
+2|3 Threshold:
+
+Estimate: 6.45398
+Z value: 204.467
+Significance: Highly significant (p < 0.001)
+Interpretation: The log-odds of moving from severity level 2 to 3 are positively associated with the predictors.
+3|4 Threshold:
+
+Estimate: 8.64781
+Z value: 273.175
+Significance: Highly significant (p < 0.001)
+Interpretation: The log-odds of moving from severity level 3 to 4 are positively associated with the predictors.
+
+Conclusion: The continuous weather variables have statistically significant relationship with distance response variable.
+
+
+
