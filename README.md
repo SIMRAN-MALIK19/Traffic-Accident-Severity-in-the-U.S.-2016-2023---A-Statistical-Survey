@@ -5,7 +5,7 @@ This project uses the "US Accidents (2016 - 2023)" dataset from Kaggle to examin
 The research question we aim to address in this study is: **"What are the key factors influencing the severity of traffic accidents in the United States, and how do these factors vary across different regions and time periods?"**
 Curiosity about the relevance of our research question led us to consider its importance. The research has the potential to contribute to the development of more effective accident prevention strategies. By pinpointing the key factors contributing to severe accidents, authorities can implement targeted measures to reduce their occurrence. Gaining insights into the relationship between various factors and accident severity is a step towards creating safer road environments for all.
 
-## DATASET DESCRIPTION
+## Dataset Description
 The "US Accidents (2016 - 2023)" dataset is a comprehensive collection of information on traffic accidents that occurred in the United States over the period from 2016 to 2023. Each unit in this dataset corresponds to a single traffic accident, and the dataset contains various attributes describing different aspects of each incident.
 **Key Variables**:
 ID: A unique identifier for each accident record.
